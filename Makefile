@@ -18,12 +18,16 @@ endif
 
 ifneq ($(MAC),)
 COMMON_OPTIONS += -destination 'generic/platform=macOS'
+else ifneq ($(SIMULATOR),)
+COMMON_OPTIONS += -destination 'generic/platform=iOS Simulator' EXCLUDED_ARCHS="arm64e"
 else
 COMMON_OPTIONS += -destination 'generic/platform=iOS'
 endif
 
 ifneq ($(MAC),)
 PRODUCTS_DIR = build/$(CONFIGURATION)
+else ifneq ($(SIMULATOR),)
+PRODUCTS_DIR = build/$(CONFIGURATION)-iphonesimulator
 else
 PRODUCTS_DIR = build/$(CONFIGURATION)-iphoneos
 endif
@@ -48,6 +52,9 @@ build-ios:
 	xcodebuild -scheme launchd $(COMMON_OPTIONS)
 	xcodebuild -scheme loader $(COMMON_OPTIONS)
 	xcodebuild -scheme safemode-ui $(COMMON_OPTIONS)
+
+build-simulator:
+	xcodebuild -scheme ellekit $(COMMON_OPTIONS)
 
 build-macos:
 	xcodebuild -scheme ellekit $(COMMON_OPTIONS)
@@ -110,6 +117,33 @@ deb-ios-rootful deb-ios-rootless: build-ios
 
 deb-ios: deb-ios-rootful deb-ios-rootless
 
+deb-simulator: ARCHITECTURE = simulator
+deb-simulator: build-simulator
+	@rm -rf work-$(ARCHITECTURE)
+	@mkdir -p $(STAGE_DIR)
+
+	@# Because BSD install does not support -D
+	@mkdir -p $(INSTALL_ROOT)/usr/lib
+
+	@install -m644 $(PRODUCTS_DIR)/libellekit.dylib $(INSTALL_ROOT)/usr/lib/libellekit.dylib
+
+	@find $(INSTALL_ROOT)/usr/lib -type f -exec ldid -S {} \;
+	
+	@ln -s libellekit.dylib $(INSTALL_ROOT)/usr/lib/libsubstrate.dylib
+	@ln -s libellekit.dylib $(INSTALL_ROOT)/usr/lib/libhooker.dylib
+	@ln -s libellekit.dylib $(INSTALL_ROOT)/usr/lib/libblackjack.dylib
+
+	@mkdir -p $(INSTALL_ROOT)/Library/Frameworks/CydiaSubstrate.framework
+	@ln -s ../../../usr/lib/libellekit.dylib $(INSTALL_ROOT)/Library/Frameworks/CydiaSubstrate.framework/CydiaSubstrate
+	@mkdir -p $(INSTALL_ROOT)/Library/MobileSubstrate/DynamicLibraries
+
+	@mkdir -p $(INSTALL_ROOT)/usr/share/doc/ellekit
+	@install -m644 LICENSE $(INSTALL_ROOT)/usr/share/doc/ellekit/LICENSE
+
+	@mkdir -p packages
+	@tar -czvf packages/ellekit_$(DEB_VERSION)_$(ARCHITECTURE).tar.gz -C ./$(STAGE_DIR) .
+	@rm -rf work-$(ARCHITECTURE)
+
 deb-macos: ARCHITECTURE = macos
 deb-macos: build-macos
 	@rm -rf work-$(ARCHITECTURE)
@@ -141,12 +175,16 @@ deb-macos: build-macos
 
 ifneq ($(MAC),)
 deb: deb-macos
+else ifneq ($(SIMULATOR),)
+deb: deb-simulator
 else
 deb: deb-ios
 endif
 
 ifneq ($(MAC),)
 build: build-macos
+else ifneq ($(SIMULATOR),)
+build: build-simulator
 else
 build: build-ios
 endif

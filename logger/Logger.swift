@@ -37,6 +37,8 @@ struct TextLog: TextOutputStream {
     private var enableLogging: Bool {
         #if !os(macOS)
         FileManager.default.fileExists(atPath: "/private/var/mobile/.ekenablelogging")
+        #elseif targetEnvironment(simulator)
+        FileManager.default.fileExists(atPath: "/opt/simject/.ekenablelogging")
         #else
         FileManager.default.fileExists(atPath: "/Library/TweakInject/.ekenablelogging")
         #endif
@@ -52,6 +54,8 @@ struct TextLog: TextOutputStream {
                 NSURL.fileURL(withPath: "/private/var/mobile/log.txt")
             }
         }
+        #elseif targetEnvironment(simulator)
+        let log = NSURL.fileURL(withPath: "/opt/simject/log.txt")
         #else
         let log = NSURL.fileURL(withPath: "/Users/charlotte/log.txt")
         #endif
